@@ -1,0 +1,220 @@
+#include<stdio.h>
+#include<stdint-gcc.h>
+#include<stdlib.h>
+#include<math.h>
+#include<time.h>
+
+#define n 32
+#define m 32
+FILE*fin=fopen("input.bmp", "rb");
+FILE*flog=fopen("log.txt", "w");
+
+struct pixel
+{
+    char r,g,b;
+};
+
+struct deltaPixel
+{
+    int8_t r,g,b;
+};
+
+char tmp[55];
+
+double r=0.99999;//온도 감률
+double k=0.1;//볼츠만 상수
+int mincost;//현재 비용
+int intstep=128;
+pixel p[n][m];
+pixel g[n][m], ng[n][m];//현재 인자, 다음 세대 인자
+
+void init(void);
+void ggen(int step);
+int cost(void);
+void changeGene(void);
+void sa(int step, double temp);
+void printImage(void);
+int main()
+{
+    int i,j;
+    srand((unsigned int)time(NULL));
+    for(i=1;i<=54;i++) // bmp 파일 포맷 입력
+    {
+        fscanf(fin,"%c",&tmp[i]);
+    }
+
+    for(i=0;i<n;i++)
+    {
+        for(j=0;j<m;j++)
+        {
+            fscanf(fin,"%c%c%c",&p[i][j].b,&p[i][j].g,&p[i][j].r);
+        }
+    }
+
+    sa(1,100);
+    printImage();
+    return 0;
+}
+void init(void) // 유전자 초기화
+{
+    int i,j;
+    for(i=0;i<n;i++)
+    {
+        for(j=0;j<m;j++)
+        {
+            g[i][j].b=rand()%256;
+            g[i][j].g=rand()%256;
+            g[i][j].r=rand()%256;
+        }
+    }
+    return;
+}
+void ggen(int step)//step수만큼 비트값을 변화
+{
+    int i,j,k,c;
+    deltaPixel pm[n][m];//증감표
+
+    for(i=0;i<n;i++)//현 세대 복제
+    {
+        for(j=0;j<m;j++)
+        {
+            ng[i][j].b=g[i][j].b;
+            ng[i][j].g=g[i][j].g;
+            ng[i][j].r=g[i][j].r;
+
+
+            pm[i][j].b=rand()%2;
+            pm[i][j].b=pm[i][j].b*2-1;
+            pm[i][j].b*=(rand()%intstep);
+
+            pm[i][j].g=rand()%2;
+            pm[i][j].g=pm[i][j].g*2-1;
+            pm[i][j].g*=(rand()%intstep);
+
+            pm[i][j].r=rand()%2;
+            pm[i][j].r=pm[i][j].r*2-1;
+            pm[i][j].r*=(rand()%intstep);
+        }
+    }
+
+    c=step;
+    while(c>0)//step만큼 변이
+    {
+        i=rand()%n;//변화할 픽셀 선정
+        j=rand()%m;
+        k=rand()%3;//rgb 결정
+        if(k==0&&ng[i][j].b+pm[i][j].b<256&&ng[i][j].b+pm[i][j].b>=0)
+        {
+            ng[i][j].b+=pm[i][j].b;
+            c-=abs(pm[i][j].b);
+        }
+        if(k==1&&ng[i][j].g+pm[i][j].g<256&&ng[i][j].g+pm[i][j].g>=0)
+        {
+            ng[i][j].g+=pm[i][j].g;
+            c-=abs(pm[i][j].g);
+        }
+        if(k==2&&ng[i][j].r+pm[i][j].r<256&&ng[i][j].r+pm[i][j].r>=0)
+        {
+            ng[i][j].r+=pm[i][j].r;
+            c-=abs(pm[i][j].r);
+        }
+    }
+}
+int cost()
+{
+    int i,j,c=0;
+    for(i=0;i<n;i++)
+    {
+        for(j=0;j<m;j++)
+        {
+            c+=abs(p[i][j].b-ng[i][j].b);
+            c+=abs(p[i][j].g-ng[i][j].g);
+            c+=abs(p[i][j].r-ng[i][j].r);
+        }
+    }
+    return c;
+}
+void changeGene()
+{
+    int i,j;
+
+    for(i=0;i<n;i++)//세대교체
+    {
+        for(j=0;j<m;j++)
+        {
+            g[i][j].b=ng[i][j].b;
+            g[i][j].g=ng[i][j].g;
+            g[i][j].r=ng[i][j].r;
+        }
+    }
+}
+void sa(int step, double temp)
+{
+    int sc,fc,x=5000;
+    double ischange;
+
+    init();
+
+    ggen(step);
+    changeGene();
+    mincost=cost();
+    while(x>0)
+    {
+        x--;
+        if(x==1)
+        {
+
+            //printf("%d %f\n",mincost,temp);
+            fprintf(flog,"%d %f\n",mincost,temp);
+            printImage();
+            x=5000;
+        }
+        ggen(step);
+
+        sc=mincost;
+        fc=cost();
+        if(sc>fc)
+        {
+            changeGene();
+            mincost=fc;
+        }
+        else
+        {
+            ischange=exp((sc-fc)/(k*temp))*100;
+            if(ischange>rand()%100)
+            {
+                changeGene();
+                mincost=fc;
+            }
+        }
+        temp=temp*r;
+        if(mincost<15000) break;
+    }
+    return;
+}
+void printImage()
+{
+    int i,j;
+
+    remove("output.bmp");
+
+    FILE *fout=fopen("output.bmp", "wb");
+    for(i=1;i<=18;i++) // bmp 파일 포맷 출력
+    {
+        fprintf(fout,"%c",tmp[i]);
+    }
+    fprintf(fout,"%c%c%c%c",128,2,0,0);
+    fprintf(fout,"%c%c%c%c",128,2,0,0);
+    for(i=27;i<=54;i++)
+    {
+        fprintf(fout,"%c",tmp[i]);
+    }
+    for(i=0;i<n*20;i++)
+    {
+        for(j=0;j<m*20;j++)
+        {
+            fprintf(fout,"%c%c%c",g[i/20][j/20].b,g[i/20][j/20].g,g[i/20][j/20].r);
+        }
+    }
+    fclose(fout);
+}
